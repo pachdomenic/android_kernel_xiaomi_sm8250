@@ -274,11 +274,7 @@ enum {
 #else
 #define TDM_MAX_SLOTS 8
 #endif
-#if defined(CONFIG_MACH_XIAOMI_ENUMA) || defined(CONFIG_MACH_XIAOMI_ELISH) || defined(CONFIG_MACH_XIAOMI_DAGU)
 #define TDM_SLOT_WIDTH_BITS 32
-#else
-#define TDM_SLOT_WIDTH_BITS 32
-#endif
 #define TDM_SLOT_WIDTH_BYTES TDM_SLOT_WIDTH_BITS/8
 
 enum {
