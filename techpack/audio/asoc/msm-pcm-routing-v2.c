@@ -25382,10 +25382,6 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets_mi2s[] = {
 	SND_SOC_DAPM_MUX("PRI_MI2S_RX_VI_FB_MUX", SND_SOC_NOPM, 0, 0,
 #endif
 				&mi2s_rx_vi_fb_mux),
-#if defined(CONFIG_SND_SOC_AW882XX_TDM)
-	SND_SOC_DAPM_MUX(PLATFORM_TDM_RX_VI_FB_MUX_NAME, SND_SOC_NOPM, 0, 0,
-				&tert_tdm_rx_vi_fb_mux),
-#endif
 	SND_SOC_DAPM_MUX("INT4_MI2S_RX_VI_FB_MONO_CH_MUX", SND_SOC_NOPM, 0, 0,
 				&int4_mi2s_rx_vi_fb_mono_ch_mux),
 	SND_SOC_DAPM_MUX("INT4_MI2S_RX_VI_FB_STEREO_CH_MUX", SND_SOC_NOPM, 0, 0,
@@ -26019,6 +26015,12 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets_tdm[] = {
 				SND_SOC_NOPM, 0, 0,
 				quin_tdm_rx_2_voice_mixer_controls,
 				ARRAY_SIZE(quin_tdm_rx_2_voice_mixer_controls)),
+
+#if defined(CONFIG_SND_SOC_AW882XX_TDM)
+	SND_SOC_DAPM_MUX(PLATFORM_TDM_RX_VI_FB_MUX_NAME, SND_SOC_NOPM, 0, 0,
+				&tert_tdm_rx_vi_fb_mux),
+#endif
+
 	/* port mixer */
 	SND_SOC_DAPM_MIXER("PRI_TDM_RX_0 Port Mixer", SND_SOC_NOPM, 0, 0,
 	pri_tdm_rx_0_port_mixer_controls,
@@ -29943,6 +29945,10 @@ static const struct snd_soc_dapm_route intercon_tdm[] = {
 	{"SEN_TDM_TX_1", NULL, "BE_IN"},
 	{"SEN_TDM_TX_2", NULL, "BE_IN"},
 	{"SEN_TDM_TX_3", NULL, "BE_IN"},
+#if defined(CONFIG_SND_SOC_AW882XX_TDM)
+	{PLATFORM_TDM_RX_VI_FB_RX_MUX_TEXT, NULL, PLATFORM_TDM_RX_VI_FB_MUX_NAME},
+	{PLATFORM_TDM_RX_VI_FB_MUX_NAME, PLATFORM_TDM_RX_VI_FB_TX_MUX_TEXT, PLATFORM_TDM_RX_VI_FB_TX_MUX_TEXT},
+#endif
 };
 #endif
 
@@ -30707,11 +30713,6 @@ static const struct snd_soc_dapm_route intercon_mi2s[] = {
 	{PLATFORM_RX_VI_FB_RX_MUX_TEXT, NULL, PLATFORM_RX_VI_FB_MUX_NAME},
 #else
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_RX_VI_FB_MUX"},
-#endif
-
-#if defined(CONFIG_SND_SOC_AW882XX_TDM)
-	{PLATFORM_TDM_RX_VI_FB_RX_MUX_TEXT, NULL, PLATFORM_TDM_RX_VI_FB_MUX_NAME},
-	{PLATFORM_TDM_RX_VI_FB_MUX_NAME, PLATFORM_TDM_RX_VI_FB_TX_MUX_TEXT, PLATFORM_TDM_RX_VI_FB_TX_MUX_TEXT},
 #endif
 	{"INT4_MI2S_RX", NULL, "INT4_MI2S_RX_VI_FB_MONO_CH_MUX"},
 	{"INT4_MI2S_RX", NULL, "INT4_MI2S_RX_VI_FB_STEREO_CH_MUX"},
