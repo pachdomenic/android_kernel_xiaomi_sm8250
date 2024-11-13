@@ -31,10 +31,12 @@
 #include <asm/uaccess.h>
 #include <linux/pmic-voter.h>
 #include <linux/irq.h>
+#include <linux/input.h>
 
 #include "nu1665.h"
 
 static int log_level = 1;
+static struct input_dev *pen_input_dev;
 static struct nuvolta_1665_chg *g_chip;
 static struct wls_fw_parameters g_wls_fw_data = { 0 };
 static int last_valid_pen_soc = -1;
@@ -293,6 +295,18 @@ static struct fod_params_t fuda1651_fod_params[] = {
 struct delayed_work *pen_notifier_work;
 
 static BLOCKING_NOTIFIER_HEAD(pen_charge_state_notifier_list);
+
+static void update_pen_attached_state(bool attached)
+{
+    input_event(pen_input_dev, EV_KEY, BTN_TOOL_PEN, attached ? 1 : 0);
+    input_sync(pen_input_dev);
+}
+
+static void update_pen_battery_status(int battery_level)
+{
+    input_event(pen_input_dev, EV_ABS, ABS_MISC, battery_level);
+    input_sync(pen_input_dev);
+}
 
 static void pen_charge_notifier_work(struct work_struct *work)
 {
@@ -3384,6 +3398,8 @@ static irqreturn_t nuvolta_1665_hall3_irq_handler(int irq, void *dev_id)
 	if (gpio_is_valid(chip->hall3_gpio)) {
 		if (gpio_get_value(chip->hall3_gpio)) {
 			nuvolta_err("hall3_irq_handler: pen detach\n");
+			update_pen_attached_state(false);
+			update_pen_battery_status(chip->reverse_pen_soc);
 			chip->hall3_online = 0;
 			if (chip->hall4_online) {
 				nuvolta_err(
@@ -3391,10 +3407,11 @@ static irqreturn_t nuvolta_1665_hall3_irq_handler(int irq, void *dev_id)
 				return IRQ_HANDLED;
 			}
 			schedule_delayed_work(&chip->hall3_irq_work,
-					      msecs_to_jiffies(0));
+			 msecs_to_jiffies(0));
 			return IRQ_HANDLED;
 		} else {
 			nuvolta_err("hall3_irq_handler: pen attach\n");
+			update_pen_attached_state(true);
 			chip->hall3_online = 1;
 		}
 	}
@@ -3417,6 +3434,8 @@ static irqreturn_t nuvolta_1665_hall4_irq_handler(int irq, void *dev_id)
 	if (gpio_is_valid(chip->hall4_gpio)) {
 		if (gpio_get_value(chip->hall4_gpio)) {
 			nuvolta_err("hall4_irq_handler: pen detach\n");
+			update_pen_attached_state(false);
+			update_pen_attached_state(false);
 			chip->hall4_online = 0;
 			if (chip->hall3_online) {
 				nuvolta_err(
@@ -3428,6 +3447,7 @@ static irqreturn_t nuvolta_1665_hall4_irq_handler(int irq, void *dev_id)
 			return IRQ_HANDLED;
 		} else {
 			nuvolta_err("hall4_irq_handler: pen attach\n");
+			update_pen_attached_state(true);
 			chip->hall4_online = 1;
 		}
 	}
@@ -4844,6 +4864,11 @@ static int nu1665_get_prop(struct power_supply *psy,
 				nuvolta_err("report last valid pen soc: %d\n",
 					    val->intval);
 		}
+
+		if (last_valid_pen_soc) {
+			update_pen_battery_status(last_valid_pen_soc);
+		}
+
 		break;
 	case POWER_SUPPLY_PROP_REVERSE_VOUT:
 		if (chip->is_reverse_mode || chip->is_boost_mode)
@@ -4897,6 +4922,7 @@ static int nu1665_set_prop(struct power_supply *psy,
 			}
 		} else {
 			nuvolta_info("pen detach, don't open reverse charge\n");
+			update_pen_attached_state(false);
 			break;
 		}
 
@@ -5049,6 +5075,28 @@ static int nuvolta_1665_probe(struct i2c_client *client,
 	struct nuvolta_1665_chg *chip;
 
 	struct power_supply_config nuvo_cfg = {};
+
+	int input_error;
+
+	// Allocate input device 
+	pen_input_dev = input_allocate_device();
+	if (!pen_input_dev) {
+		dev_err(&client->dev, "Failed to allocate input device for pen\n");
+		return -ENOMEM;
+	}
+
+	pen_input_dev->name = "Pen Input Device";
+	pen_input_dev->id.bustype = BUS_I2C;
+	pen_input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
+	pen_input_dev->keybit[BIT_WORD(BTN_TOOL_PEN)] = BIT_MASK(BTN_TOOL_PEN);
+	input_set_abs_params(pen_input_dev, ABS_MISC, 0, 100, 0, 0);  // Battery level range
+
+	input_error = input_register_device(pen_input_dev);
+	if (input_error) {
+		dev_err(&client->dev, "Failed to register input device for pen\n");
+		input_free_device(pen_input_dev);
+		return input_error;
+	}
 
 	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip) {
@@ -5239,6 +5287,9 @@ static int nuvolta_1665_remove(struct i2c_client *client)
 		gpio_free(chip->irq_gpio);
 	if (chip->power_good_gpio > 0)
 		gpio_free(chip->power_good_gpio);
+
+	input_unregister_device(pen_input_dev);
+	input_free_device(pen_input_dev);
 
 	return 0;
 }
